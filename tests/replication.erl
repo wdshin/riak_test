@@ -17,22 +17,26 @@ replication() ->
     %% Nodes = rt:nodes(NumNodes),
     %% lager:info("Create dirs"),
     %% create_dirs(Nodes),
-
     Backend = list_to_atom(get_os_env("RIAK_BACKEND",
-            "riak_kv_bitcask_backend")),
+                                      "riak_kv_bitcask_backend")),
 
-    lager:info("Deploy ~p nodes using ~p backend", [NumNodes, Backend]),
+    Compression = list_to_atom(get_os_env("REPL_COMPRESSION",
+                                          "undefined")),
+
+    lager:info("Deploy ~p nodes using ~p backend and compression compression type: ~p",
+               [NumNodes, Backend, Compression]),
     Conf = [
             {riak_kv,
              [
-                {storage_backend, Backend}
+              {storage_backend, Backend}
              ]},
             {riak_repl,
              [
-                {fullsync_on_connect, false},
-                {fullsync_interval, disabled}
+              {fullsync_on_connect, false},
+              {fullsync_interval, disabled},
+              {compression, Compression}
              ]}
-    ],
+           ],
 
     Nodes = deploy_nodes(NumNodes, Conf),
 
@@ -84,6 +88,7 @@ replication([AFirst|_] = ANodes, [BFirst|_] = BNodes, Connected) ->
             add_site(hd(BNodes), {Ip, Port, "site1"}),
             FakeListeners = gen_fake_listeners(NumSites-1),
             add_fake_sites(BNodes, FakeListeners),
+            timer:sleep(5000),
 
             %% verify sites are distributed on B
             verify_sites_balanced(NumSites, BNodes),
