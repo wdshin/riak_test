@@ -307,7 +307,7 @@ kv_populate_script(Bucket, Host, Port) ->
            {http_raw_port, Port},
            {http_raw_path, "/riak/" ++ Bucket}],
     Config = "bb-populate-" ++ Bucket ++ ".config",
-    write_terms(Config, Cfg),
+    rt_utils:write_terms(Config, Cfg),
     ok.
 
 kv_verify_script(Bucket, Host, Port) ->
@@ -324,7 +324,7 @@ kv_verify_script(Bucket, Host, Port) ->
            {http_raw_path, "/riak/" ++ Bucket},
            {shutdown_on_error, true}],
     Config = "bb-verify-" ++ Bucket ++ ".config",
-    write_terms(Config, Cfg),
+    rt_utils:write_terms(Config, Cfg),
     ok.
 
 kv_repair_script(Bucket, Host, Port) ->
@@ -341,7 +341,7 @@ kv_repair_script(Bucket, Host, Port) ->
            {http_raw_port, Port},
            {http_raw_path, "/riak/" ++ Bucket}],
     Config = "bb-repair-" ++ Bucket ++ ".config",
-    write_terms(Config, Cfg),
+    rt_utils:write_terms(Config, Cfg),
     ok.
 
 %% ===================================================================
@@ -367,7 +367,7 @@ mapred_populate_script(Host, Port) ->
             {function, basho_bench_driver_riakc_pb, mapred_ordered_valgen, []}}],
 
     Config = "bb-populate-mapred.config",
-    write_terms(Config, Cfg),
+    rt_utils:write_terms(Config, Cfg),
     ok.
 
 mapred_verify_script(Host, Port) ->
@@ -385,7 +385,7 @@ mapred_verify_script(Host, Port) ->
            {riakc_pb_keylist_length, 1000},
            {shutdown_on_error, true}],
     Config = "bb-verify-mapred.config",
-    write_terms(Config, Cfg),
+    rt_utils:write_terms(Config, Cfg),
     ok.
 
 %% ===================================================================
@@ -412,7 +412,7 @@ search_populate_script(Bucket, IPs, SpamDir) ->
            {shutdown_on_error, true}],
 
     Config = "bb-populate-" ++ Bucket ++ ".config",
-    write_terms(Config, Cfg).
+    rt_utils:write_terms(Config, Cfg).
 
 search_verify_script(Bucket, IPs) ->
     Expect = [{"postoffice.mr.net", 194},
@@ -433,9 +433,4 @@ search_verify_script(Bucket, IPs) ->
            {shutdown_on_error, true}],
 
     Config = "bb-verify-" ++ Bucket ++ ".config",
-    write_terms(Config, Cfg).
-
-write_terms(File, Terms) ->
-    {ok, IO} = file:open(File, [write]),
-    [io:fwrite(IO, "~p.~n", [T]) || T <- Terms],
-    file:close(IO).
+    rt_utils:write_terms(Config, Cfg).

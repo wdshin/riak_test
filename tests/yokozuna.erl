@@ -47,7 +47,7 @@ async_query(Cluster) ->
            {shutdown_on_error, true}],
 
     File = "bb-query-fruit-" ++ ?INDEX_S,
-    write_terms(File, Cfg),
+    rt_utils:write_terms(File, Cfg),
     run_bb(async, File).
 
 create_index(Node, Index) ->
@@ -84,7 +84,7 @@ load_data(Cluster) ->
            {key_generator, {function, rs_bb_driver, fruit_key_val_gen, []}},
            {operations, [{load_fruit, 1}]}],
     File = "bb-load-fruit-" ++ ?INDEX_S,
-    write_terms(File, Cfg),
+    rt_utils:write_terms(File, Cfg),
     run_bb(sync, File).
 
 run_bb(Method, File) ->
@@ -113,8 +113,3 @@ wait_for(Ref) ->
     {Status, Output} = rt:wait_for_cmd(Ref),
     lager:info("Saw status ~p with output ~p", [Status, Output]),
     Status.
-
-write_terms(File, Terms) ->
-    {ok, IO} = file:open(File, [write]),
-    [io:fwrite(IO, "~p.~n", [T]) || T <- Terms],
-    file:close(IO).
