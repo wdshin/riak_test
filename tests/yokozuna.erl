@@ -8,33 +8,34 @@
 -define(SUCCESS, 0).
 
 confirm() ->
+    YZBenchDir = rt:get_os_env("YZ_BENCH_DIR"),
     random:seed(now()),
     Nodes = rt:deploy_nodes(4),
     Cluster = join_three(Nodes),
     wait_for_joins(Cluster),
     setup_indexing(Cluster),
-    load_data(Cluster),
-    Ref = async_query(Cluster),
+    load_data(Cluster, YZBenchDir),
+    Ref = async_query(Cluster, YZBenchDir),
     Cluster2 = join_rest(Cluster, Nodes),
     check_status(wait_for(Ref)),
     KeysDeleted = delete_some_data(Cluster2, reap_sleep()),
-    verify_deletes(Cluster2, KeysDeleted),
+    verify_deletes(Cluster2, KeysDeleted, YZBenchDir),
     pass.
 
-async_query(Cluster) ->
+async_query(Cluster, YZBenchDir) ->
     lager:info("Run async query against cluster ~p", [Cluster]),
     Hosts = host_entries(rt:connection_info(Cluster)),
     Concurrent = length(Hosts),
-    Expect = [{"apple", ?NUM_KEYS}],
-    Operations = [{{search,E},1} || E <- Expect],
+    Apple = {search,"apple","id",?NUM_KEYS},
     Cfg = [{mode, {rate,8}},
            {duration, 2},
            {concurrent, Concurrent},
-           {driver, basho_bench_driver_http_raw},
-           {operations, Operations},
-           {http_raw_ips, Hosts},
-           {http_solr_path, "/search/" ++ ?INDEX_S},
-           {http_raw_path, "/riak/" ++ ?INDEX_S},
+           {code_paths, [YZBenchDir]},
+           {driver, yz_driver},
+           {operations, [{Apple,1}]},
+           {http_conns, Hosts},
+           {pb_conns, []},
+           {search_path, "/search/" ++ ?INDEX_S},
            {shutdown_on_error, true}],
 
     File = "bb-query-fruit-" ++ ?INDEX_S,
@@ -81,19 +82,21 @@ join_rest([NodeA|_]=Cluster, Nodes) ->
     [begin rt:join(Node, NodeA) end || Node <- ToJoin],
     Nodes.
 
-load_data(Cluster) ->
+load_data(Cluster, YZBenchDir) ->
     lager:info("Load data onto cluster ~p", [Cluster]),
     Hosts = host_entries(rt:connection_info(Cluster)),
+    KeyGen = {function, yz_driver, fruit_key_val_gen, [?NUM_KEYS]},
     Cfg = [{mode,max},
            {duration,5},
            {concurrent, 3},
-           {driver, rs_bb_driver},
-           {rs_index_path, "/riak/fruit"},
-           {rs_ports, Hosts},
-           {pb_ports, []},
-           {key_generator, {function, rs_bb_driver, fruit_key_val_gen, [?NUM_KEYS]}},
+           {code_paths, [YZBenchDir]},
+           {driver, yz_driver},
+           {index_path, "/riak/fruit"},
+           {http_conns, Hosts},
+           {pb_conns, []},
+           {key_generator, KeyGen},
            {operations, [{load_fruit, 1}]}],
-    File = "bb-load-fruit-" ++ ?INDEX_S,
+    File = "bb-load-" ++ ?INDEX_S,
     rt_utils:write_terms(File, Cfg),
     run_bb(sync, File).
 
@@ -122,19 +125,22 @@ setup_indexing(Cluster) ->
     %% Give Solr time to build index
     timer:sleep(5000).
 
-verify_deletes(Cluster, KeysDeleted) ->
+verify_deletes(Cluster, KeysDeleted, YZBenchDir) ->
+    NumDeleted = length(KeysDeleted),
+    lager:info("Verify ~p keys were deleted", [NumDeleted]),
     Hosts = host_entries(rt:connection_info(Cluster)),
     Concurrent = length(Hosts),
-    Expect = [{"apple", ?NUM_KEYS - length(KeysDeleted)}],
-    Operations = [{{search,E},1} || E <- Expect],
+    Apple = {search,"apple","id",?NUM_KEYS - NumDeleted},
+
     Cfg = [{mode, max},
            {duration, 1},
            {concurrent, Concurrent},
-           {driver, basho_bench_driver_http_raw},
-           {operations, Operations},
-           {http_raw_ips, Hosts},
-           {http_solr_path, "/search/" ++ ?INDEX_S},
-           {http_raw_path, "/riak/" ++ ?INDEX_S},
+           {driver, yz_driver},
+           {code_paths, [YZBenchDir]},
+           {operations, [{Apple,1}]},
+           {http_conns, Hosts},
+           {pb_conns, []},
+           {search_path, "/search/" ++ ?INDEX_S},
            {shutdown_on_error, true}],
 
     File = "bb-verify-deletes-" ++ ?INDEX_S,
