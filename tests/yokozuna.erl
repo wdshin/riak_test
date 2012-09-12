@@ -2,6 +2,7 @@
 -compile(export_all).
 -include_lib("eunit/include/eunit.hrl").
 
+-define(FRUIT_SCHEMA_NAME, <<"fruit">>).
 -define(INDEX_S, "fruit").
 -define(INDEX_B, <<"fruit">>).
 -define(NUM_KEYS, 10000).
@@ -13,7 +14,7 @@ confirm() ->
     Nodes = rt:deploy_nodes(4),
     Cluster = join_three(Nodes),
     wait_for_joins(Cluster),
-    setup_indexing(Cluster),
+    setup_indexing(Cluster, YZBenchDir),
     load_data(Cluster, YZBenchDir),
     Ref = async_query(Cluster, YZBenchDir),
     Cluster2 = join_rest(Cluster, Nodes),
@@ -45,9 +46,9 @@ async_query(Cluster, YZBenchDir) ->
 check_status({Status,_}) ->
     ?assertEqual(?SUCCESS, Status).
 
-create_index(Node, Index) ->
+create_index(Node, Index, SchemaName) ->
     lager:info("Creating index ~s [~p]", [Index, Node]),
-    rpc:call(Node, yz_index, create, [Index]).
+    rpc:call(Node, yz_index, create, [Index, SchemaName]).
 
 delete_key(Cluster, Key) ->
     Node = select_random(Cluster),
@@ -100,6 +101,11 @@ load_data(Cluster, YZBenchDir) ->
     rt_utils:write_terms(File, Cfg),
     run_bb(sync, File).
 
+read_schema(YZBenchDir) ->
+    Path = filename:join([YZBenchDir, "schemas", "fruit_schema.xml"]),
+    {ok, RawSchema} = file:read_file(Path),
+    RawSchema.
+
 reap_sleep() ->
     %% NOTE: This is hardcoded to 5s now but if this test ever allows
     %%       configuation of deletion policy then this should be
@@ -118,12 +124,17 @@ select_random(List) ->
     Idx = random:uniform(Length),
     lists:nth(Idx, List).
 
-setup_indexing(Cluster) ->
+setup_indexing(Cluster, YZBenchDir) ->
     Node = select_random(Cluster),
-    ok = create_index(Node, ?INDEX_S),
+    RawSchema = read_schema(YZBenchDir),
+    ok = store_schema(Node, ?FRUIT_SCHEMA_NAME, RawSchema),
+    ok = create_index(Node, ?INDEX_S, ?FRUIT_SCHEMA_NAME),
     ok = install_hook(Node, ?INDEX_B),
     %% Give Solr time to build index
     timer:sleep(5000).
+
+store_schema(Node, Name, RawSchema) ->
+    ok = rpc:call(Node, yz_schema, store, [Name, RawSchema]).
 
 verify_deletes(Cluster, KeysDeleted, YZBenchDir) ->
     NumDeleted = length(KeysDeleted),
